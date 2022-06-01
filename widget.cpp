@@ -10,6 +10,7 @@
 #include <QScreen>
 #include <QMenu>
 #include <QAction>
+#include <QScreen>
 //1.直接设置图标-动画会鬼畜 故改方案
 //2.不按下左键时检测检测鼠标移动要用setMouseTraching(true)但此时检测频率较低 卡顿；而按住左键moveEvent就没有这个问题
 //但由于不可实施，改为QTimer跟随
@@ -29,7 +30,7 @@ Widget::Widget(QWidget* parent)
     setAttribute(Qt::WA_TranslucentBackground);
     qApp->setQuitOnLastWindowClosed(false); //否则对话框关闭后就会quit
     QtWin::taskbarDeleteTab(this); //删除任务栏图标
-    setCursor(Qt::BlankCursor);
+    setCursor(Qt::BlankCursor); //BlankCursor也算isCursorVisible，只有ShowCursor(false);isCursorHide()才是true
     setGeometry(qApp->screens().at(0)->geometry() - QMargins(0, 0, 0, 1)); //不能showFullScreen()，否则会自动隐藏任务栏
 
     cursorPix = QPixmap(":/images/cursor.png");
@@ -64,6 +65,11 @@ Widget::Widget(QWidget* parent)
 
     QTimer* timer_detect = new QTimer(this);
     timer_detect->callOnTimeout([=]() {
+        if (isCursorHide()) { //BlankCursor也算isCursorVisible，只有ShowCursor(false);isCursorHide()才是true 所以不用担心show时 return
+            //qDebug() << "hide";
+            return;
+        }
+
         static QPoint llPos = QCursor::pos();
         static QPoint lPos = QCursor::pos();
         QPoint nowPos = QCursor::pos();
@@ -84,6 +90,8 @@ Widget::Widget(QWidget* parent)
     timer_detect->start(20);
 
     connect(this, &Widget::cornerDetected, [=](QPoint pos, QTime now) {
+        if (isStopWhileFullScreen && isForeFullScreen()) return; //不放在timer_detect检测 防止性能损耗
+
         static QPoint lastCornerPos = QCursor::pos();
         static QTime lastCorner;
 
@@ -158,9 +166,17 @@ void Widget::initSysTray()
     menu->setStyleSheet("QMenu{background-color:rgb(15,15,15);color:rgb(220,220,220);}"
                         "QMenu:selected{background-color:rgb(60,60,60);}");
 
+    QAction* act_fullScreen = new QAction("全屏时禁用", menu);
     QAction* act_autoStart = new QAction("AutoStart", menu);
     QAction* act_setting = new QAction("Settings", menu);
     QAction* act_quit = new QAction("Quit>>", menu);
+    act_fullScreen->setCheckable(true);
+    act_fullScreen->setChecked(isStopWhileFullScreen);
+    connect(act_fullScreen, &QAction::toggled, [=](bool checked) {
+        isStopWhileFullScreen = checked;
+        sysTray->showMessage("Tip", checked ? "已开启[全屏时禁用]" : "已关闭[全屏时禁用]");
+        writeIni();
+    });
     act_autoStart->setCheckable(true);
     act_autoStart->setChecked(isAutoRun());
     connect(act_autoStart, &QAction::toggled, [=](bool checked) {
@@ -174,12 +190,13 @@ void Widget::initSysTray()
             qDebug() << gap << distance;
             Gap = gap;
             Dist = distance;
-            writeIni();
+            writeIni(); //其实在Setting Widget里直接存比较好 设置过多的话 不好传出
         });
         dia.exec();
     });
     connect(act_quit, &QAction::triggered, qApp, &QApplication::quit);
 
+    menu->addAction(act_fullScreen);
     menu->addAction(act_autoStart);
     menu->addAction(act_setting);
     menu->addAction(act_quit);
@@ -209,6 +226,7 @@ void Widget::writeIni()
     QSettings iniSet(iniPath, QSettings::IniFormat);
     iniSet.setValue("GapTime", Gap);
     iniSet.setValue("Distance", Dist);
+    iniSet.setValue("DetectFullScreen", isStopWhileFullScreen);
 }
 
 void Widget::readIni()
@@ -217,6 +235,38 @@ void Widget::readIni()
     QSettings iniSet(iniPath, QSettings::IniFormat);
     Gap = iniSet.value("GapTime", Gap).toInt();
     Dist = iniSet.value("Distance", Dist).toInt();
+    isStopWhileFullScreen = iniSet.value("DetectFullScreen", isStopWhileFullScreen).toBool();
+}
+
+bool Widget::isCursorHide()
+{
+    CURSORINFO info;
+    info.cbSize = sizeof(CURSORINFO);
+    GetCursorInfo(&info);
+    return info.flags != CURSOR_SHOWING;
+}
+
+bool Widget::isForeFullScreen()
+{
+    QRect Screen = qApp->primaryScreen()->geometry();
+    HWND Hwnd = GetForegroundWindow();
+
+    HWND H_leftBottom = topWinFromPoint(Screen.bottomLeft()); //获取左下角像素所属窗口，非全屏是任务栏
+    if (Hwnd != H_leftBottom) return false;
+
+    RECT Rect;
+    GetWindowRect(Hwnd, &Rect);
+    if (Rect.right - Rect.left >= Screen.width() && Rect.bottom - Rect.top >= Screen.height()) //确保窗口大小(二重验证)
+        return true;
+    return false;
+}
+
+HWND Widget::topWinFromPoint(const QPoint& pos)
+{
+    HWND hwnd = WindowFromPoint({ pos.x(), pos.y() });
+    while (GetParent(hwnd) != NULL)
+        hwnd = GetParent(hwnd);
+    return hwnd;
 }
 
 void Widget::paintEvent(QPaintEvent* event) // 不绘制会导致setCursor(blank)失效
