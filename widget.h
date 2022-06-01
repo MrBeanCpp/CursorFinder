@@ -29,6 +29,9 @@ public:
     bool isAutoRun(void);
     void writeIni(void);
     void readIni(void);
+    bool isCursorHide(void);
+    bool isForeFullScreen(void);
+    HWND topWinFromPoint(const QPoint& pos);
 
 signals:
     void cornerDetected(QPoint pos, QTime time);
@@ -47,6 +50,8 @@ private:
 
     int Gap = 120; //ms
     int Dist = 150; //px
+
+    bool isStopWhileFullScreen = true;
 
     // QWidget interface
 protected:
