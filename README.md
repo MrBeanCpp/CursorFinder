@@ -1,6 +1,7 @@
 # CursorFinder
 
-#### 介绍
+## 介绍
+原项目是MrBeanCpp/CursorFinder，项目地址为https://github.com/MrBeanCpp/CursorFinder
 Windows平台下的 [Shake to Find Cursor] 晃动鼠标放大光标  
 防止找不到鼠标光标
 
