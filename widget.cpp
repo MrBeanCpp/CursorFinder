@@ -33,7 +33,17 @@ Widget::Widget(QWidget* parent)
     setCursor(Qt::BlankCursor); //BlankCursor也算isCursorVisible，只有ShowCursor(false);isCursorHide()才是true
     setGeometry(qApp->screens().at(0)->geometry() - QMargins(0, 0, 0, 1)); //不能showFullScreen()，否则会自动隐藏任务栏
 
-    cursorPix = QPixmap(":/images/cursor.png");
+    cursorPix = QPixmap(":/images/cursor.png"); // default
+
+    {
+        QDir dir(QCoreApplication::applicationDirPath());
+        dir.setFilter(QDir::Files);
+        dir.setNameFilters(QStringList() << "cursor.cur" << "cursor.ico" << "cursor.png" << "cursor.jpg" << "cursor.jpeg");
+
+        QFileInfoList files = dir.entryInfoList();
+        if (!files.empty())
+            cursorPix = QPixmap(files.at(0).filePath());
+    }
 
     QGraphicsOpacityEffect* labelOpacity = new QGraphicsOpacityEffect(ui->label);
     labelOpacity->setOpacity(0);
@@ -47,7 +57,7 @@ Widget::Widget(QWidget* parent)
 
     QTimeLine* TL_scale = new QTimeLine(100, this);
     TL_scale->setUpdateInterval(10);
-    connect(TL_scale, &QTimeLine::valueChanged, [=](qreal value) {
+    connect(TL_scale, &QTimeLine::valueChanged, this, [=](qreal value) {
         int width = 30 + value * 80;
         labelOpacity->setOpacity(value);
         QPixmap pix = cursorPix.scaledToWidth(width);
@@ -55,7 +65,7 @@ Widget::Widget(QWidget* parent)
         setCursorPix(pix);
     });
 
-    connect(TL_scale, &QTimeLine::finished, [=]() {
+    connect(TL_scale, &QTimeLine::finished, this, [=]() {
         if (TL_scale->direction() == QTimeLine::Backward) {
             qDebug() << "Backward";
             timer_cursor->stop();
