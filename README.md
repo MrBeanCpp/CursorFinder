@@ -1,6 +1,6 @@
 # CursorFinder
 
-Windows平台下的 `Shake to Find Cursor` 晃动鼠标放大光标  
+`Windows`平台下的 `Shake to Find Cursor` 晃动鼠标放大光标  
 防止找不到鼠标光标
 
 ## 更换默认光标（Change Default Cursor Image）

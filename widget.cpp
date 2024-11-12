@@ -31,7 +31,7 @@ Widget::Widget(QWidget* parent)
     qApp->setQuitOnLastWindowClosed(false); //否则对话框关闭后就会quit
     QtWin::taskbarDeleteTab(this); //删除任务栏图标
     setCursor(Qt::BlankCursor); //BlankCursor也算isCursorVisible，只有ShowCursor(false);isCursorHide()才是true
-    setGeometry(qApp->screens().at(0)->geometry() - QMargins(0, 0, 0, 1)); //不能showFullScreen()，否则会自动隐藏任务栏
+    setGeometry(qApp->screens().at(0)->geometry() - QMargins(0, 0, 0, 1)); //不能showFullScreen()，否则会自动隐藏任务栏 (也没事吧 反正结束后hide？)
 
     cursorPix = QPixmap(":/images/cursor.png"); // default
 
@@ -52,7 +52,12 @@ Widget::Widget(QWidget* parent)
     QTimer* timer_cursor = new QTimer(this);
     timer_cursor->setInterval(10);
     timer_cursor->callOnTimeout([=]() {
-        ui->label->move(QCursor::pos());
+        // 反复横跨显示器的瞬间会：Unable to set geometry
+        if (QScreen* mouseScreen = QGuiApplication::screenAt(QCursor::pos())) {
+            if (auto geo = mouseScreen->geometry().adjusted(0, 0, 0, -1); geo != this->geometry())
+                this->setGeometry(geo);
+        }
+        ui->label->move(screenCursorPos());
     });
 
     QTimeLine* TL_scale = new QTimeLine(100, this);
@@ -112,6 +117,7 @@ Widget::Widget(QWidget* parent)
                 TL_scale->setDirection(QTimeLine::Forward);
                 TL_scale->start();
                 setCursorPix(cursorPix.scaledToWidth(20));
+
                 show();
             }
         }
@@ -162,7 +168,8 @@ double Widget::includeAngle(const QPoint& A, const QPoint& B, const QPoint& C)
 
 void Widget::setCursorPix(const QPixmap& pix)
 {
-    ui->label->setGeometry(QRect(QCursor::pos(), pix.size()));
+    // ui->label->setGeometry(QRect(screenCursorPos(), pix.size()));
+    ui->label->resize(pix.size());
     ui->label->setPixmap(pix);
 }
 
@@ -277,6 +284,14 @@ HWND Widget::topWinFromPoint(const QPoint& pos)
     while (GetParent(hwnd) != NULL)
         hwnd = GetParent(hwnd);
     return hwnd;
+}
+
+// screen local pos of cursor
+QPoint Widget::screenCursorPos()
+{
+    auto cursorPos = QCursor::pos();
+    QScreen* screen = QGuiApplication::screenAt(cursorPos);
+    return cursorPos - screen->geometry().topLeft();
 }
 
 void Widget::paintEvent(QPaintEvent* event) // 不绘制会导致setCursor(blank)失效

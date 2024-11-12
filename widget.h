@@ -32,6 +32,7 @@ public:
     bool isCursorHide(void);
     bool isForeFullScreen(void);
     HWND topWinFromPoint(const QPoint& pos);
+    QPoint screenCursorPos(void);
 
 signals:
     void cornerDetected(QPoint pos, QTime time);
